@@ -1,0 +1,215 @@
+---
+title: "CPTR330 -- Homework 3"
+author: "Pierre Visconti"
+date: "April 17, 2023"
+course: CPTR330
+output: 
+  pdf_document:
+    number_section: false
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+library("C50")
+library("gmodels")
+library(wordcloud)
+library(RColorBrewer)
+source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+.AutograderInit()
+```
+
+# C5.0 Decision Tree Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give two of the strengths and two of the weaknesses.
+```
+Decision tree algorithms are a classification algorithm that uses a tree structure to create a model. The algorithm builds the model using what is known as divide and conquer, which is a method of recursively breaking a problem into sub-problems. This recursive partitioning is what gives the algorithm its name, as when you represent the model visually it looks like a tree. 
+Some strengths of decision trees is that they can provide a model with a resulting structure that is easy for humans to understand, and that they be applied on almost any type of data with often good results. Decision trees also exclude unimportant features unlike other algorithms like naive bayes. Despite these strengths though decision trees do suffer from some negatives, mainly that datasets with a large amount of numeric features could result in an overcomplicated model and the model is prone to overfitting/underfitting. 
+
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The data is of gilled mushrooms of 23 species from two different families.The data has a lot of different variables on each mushroom that describes it's physical attributes and characteristics, habitat, color, and anything else that could be used to identify the mushroom. The data then includes one variable with two classes, edible and poisonous which is what we will try to predict. The distribution of edible and poisonous is roughly 50/50 and there are over 8,000 observations. The data comes from records drawn from The Audubon Society Field Guide to North American Mushrooms (1981). G. H. Lincoff (Pres.), New York: Alfred A. Knopf. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+
+Importing the data and adding column names
+```{r}
+data = read.csv("agaricus-lepiota.data")
+colnames(data) = c("type","cap_shape", "cap-surface", "cap-color", "bruises", "odor", "gill-attachment", "gill-spacing", "gill-size", "gill-color", "stalk-shape", "stalk-root", "stalk-surface-above-ring", "stalk-surface-below-ring", "stalk-color-above-ring", "stalk-color-below-ring", "veil-type", "veil-color", "ring-number", "ring-type", "spore-print-color", "population", "habitat")
+str(data)
+data = as.data.frame(unclass(data),stringsAsFactors=TRUE)
+str(data)
+```
+All of the variables in the dataset are categorical and nominal. Although they are all nominal, none of them have a lot of different levels. The data is already sufficiently prepared for the decision tree algorithm, except for the veil-type variable which only has one level and can be removed. 
+```{r}
+# removing veil.type variable
+data = data[-17]
+str(data)
+```
+create training and testing datasets
+```{r}
+# setting seed
+set.seed(201)
+# create training and test data by randomly sampling
+train.size = round(nrow(data)*0.85) # 85% of the dataset used for training
+train.ind = sample(1:nrow(data), train.size)
+data_train = data[train.ind,-1]
+data_test = data[-train.ind,-1]
+# create labels for training and test data
+data_train_labels = data[train.ind, 1]
+data_test_labels = data[-train.ind, 1]
+```
+
+checking distribution of edible/poisonous for each dataset
+```{r}
+prop.table(table(data_train_labels))
+prop.table(table(data_test_labels))
+```
+data is ready to be used for training/testing
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+Training the model involves feeding the algorithm our training dataset, from which it will build a model that can then be used to make predictions. The algorithm will produce a model that can be easily interpreted by humans and disregard any non-important features for us. We have multiple parameters that can be changed during the training phase which will impact our final model, such as pruning, adaptive boosting, cost matrix, max layers. 
+
+Training the model with default parameters. 
+```{r}
+mushroom_model = C5.0(data_train, data_train_labels)
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+
+```{r}
+mushroom_model
+summary(mushroom_model)
+plot(mushroom_model)
+```
+The model has a 0% error rate on the training set and built a tree with 6 branches and 9 nodes as can be seen in the decision tree section of the output and the graphical representation. There could be some overfitting that is occurring, which we can check by predicting test dataset. 
+
+
+Checking model performance on test set
+```{r}
+predict_mushroom = predict(mushroom_model, data_test)
+CrossTable(predict_mushroom, data_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual default', 'predicted default'))
+```
+The model correctly predicted every single object in the testing set for an accuracy of 100% which means that we do indeed have a model with very high accuracy. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+While the performance of the original model is very impressive at 100% accuracy, I believe that the model is overly complex with it's 6 branches and 9 nodes, that is a lot of information for a person to remember. The goal of the improvement step will be to simplify the model while still achieving very high accuracy, especially with false negatives. We do not want to identify a mushroom as edible if it is actually poisonous, but we could be a bit more lenient on identifying a mushroom as poisonous if it is actually edible if that helps simplify the model. 
+To simplify the model there are several options possible. A different algorithm could be used which may generate a less complex model, or we could try to prune the model using our current algorithm. If our performance was not as good as our 100% there are parameters that could be tuned to try and improve the accuracy. We could implement adaptive boosting which assigns weights to wrongly classified points and retrains the model giving those points with a higher weight more importance. It will repeat this process for the given number of iterations with the goal of reducing model error. In this case of datasets where certain types of misclassifications are more important than others, we could also give the algorithm a cost matrix. For example with this dataset, misclassifying a poisonous mushroom as edible is clearly worse than misclassifying an edible one as poisonous. So by implementing a cost matrix we would give higher weight to the type of classification that matters the most and train the model with that in mind.  
+
+creating testing and training datasets with seed of 770
+```{r}
+# setting seed
+set.seed(770)
+# create training and test data by randomly sampling
+train.size = round(nrow(data)*0.85) # 85% of the dataset used for training
+train.ind = sample(1:nrow(data), train.size)
+data_train = data[train.ind,-1]
+data_test = data[-train.ind,-1]
+# create labels for training and test data
+data_train_labels = data[train.ind, 1]
+data_test_labels = data[-train.ind, 1]
+```
+
+checking accuracy of original model with this new seed
+```{r}
+mushroom_model = C5.0(data_train, data_train_labels)
+predict_mushroom = predict(mushroom_model, data_test)
+CrossTable(predict_mushroom, data_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual default', 'predicted default'))
+plot(mushroom_model)
+```
+With the seed set to 770, our original model predicted 1217 out of 1218 objects correctly for an accuracy of 0.99. The model has 5 branches and 7 nodes so it is significantly less complex than with the original seed. 
+
+adding adaptive boosting with 10 iterations
+```{r}
+mushroom_model = C5.0(data_train, data_train_labels, trials=10)
+predict_mushroom = predict(mushroom_model, data_test)
+CrossTable(predict_mushroom, data_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual default', 'predicted default'))
+```
+```{r}
+mushroom_model
+summary(mushroom_model)
+plot(mushroom_model)
+# wordcloud output showing most important features
+wordcloud(words = mushroom_model$output, min.freq = 2, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+With the implementation of adaptive boosting we have increased the accuracy to 100% and lowered our error rate which is the goal of adaptive boosting. For this specific dataset, this was probably not necessary since we had already achieved incredibly low error with the original model and there was little room for improvement in terms of prediction accuracy. 
+
+building the model with a cost matrix
+```{r}
+# create dimensions for a cost matrix
+matrix_dimensions <- list(c("e", "p"), c("e", "p"))
+names(matrix_dimensions) <- c("predicted", "actual")
+matrix_dimensions
+
+# build the matrix
+error_cost <- matrix(c(0, 1, 2, 0), nrow = 2, dimnames = matrix_dimensions)
+error_cost
+
+# apply the cost matrix to the tree
+mushroom_model = C5.0(data_train, data_train_labels, costs=error_cost)
+predict_mushroom = predict(mushroom_model, data_test)
+CrossTable(predict_mushroom, data_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual default', 'predicted default'))
+mushroom_model
+summary(mushroom_model)
+plot(mushroom_model)
+# wordcloud output showing most important features
+wordcloud(words = mushroom_model$output, min.freq = 2, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+```
+A cost matrix was built where a misclassification of edible when it is actually poisonous was given a higher weight of 2, and a misclassification of poisonous when it is in fact edible was given a lower weight of 1. This would have a higher impact if our original model was not as effective, especially if it reported a lot of false negatives where the poisonous mushroom was misclassified. That being said, the model did perform better than our original model and got 100% accuracy compared to the 99% before. Note that this model did not use adaptive boosting yet still achieved the same performance with the cost matrix. The performance increase though is overshadowed by the increased complexity of the model which is something we did not observe from the adaptive boosting model. For this specific dataset a cost matrix was not necessary since we already had zero important false negatives, but could be necessary for another dataset where importantant false negatives or false positives are made even if it means building a more complex model. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep5()
+```
+
+## Autograding
+
+```{r}
+.AutograderMyTotalScore()
+```

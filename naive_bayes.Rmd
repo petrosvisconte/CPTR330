@@ -1,0 +1,210 @@
+---
+title: "CPTR330 -- Homework 2"
+author: "Pierre Visconti"
+date: "April 10, 2023"
+output:
+  pdf_document:
+    number_section: no
+  word_document: default
+course: CPTR330
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+library(dplyr)
+library(e1071)
+library(gmodels)
+source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+.AutograderInit()
+```
+
+# Naive Bayes Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give two of the strengths and two of the weaknesses.
+```
+Naive Bayes is a supervised probabilistic classification algorithm based on Bayes' theorem for calculating conditional probability. It assumes that all of the features in the data are independent from one another and each are equally important. 
+
+Some strengths of Naive Bayes is that it performs as well as some of the best classifier algorithms even while violating the assumption of independence and it is robust to noisy and missing data. Naive Bayes though is not ideal for datasets with a lot of numeric features as they will all have to be converted to factors in some way, also the assumptions it makes are rarely ever true in the real world. 
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The data was extracted by Barry Becker from the 1994 census bureau database. The goal is the dataset is to predict whether someone's income is greater or less than 50k. The dataset includes a number of variables like each person's education level, their work occupation, their sex, the hours they work per week, etc. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+The dataset has 6 numerical variables, and 9 categorical variables. The categorical variables can simply be converted to factors, but the numerical variables require further transformation to be usable by Naive Bayes. There are many missing values in the dataset but thankfully Naive Bayes is very robust in this regard. The dataset also does not include column names so that needs to be added in as well. 
+
+Importing data and naming columns
+```{r}
+# import data
+adult = read.csv("adult.data")
+# changing column names to the actual names as given on the UCI website
+colnames(adult) = c('age', 'workclass', 'fnlwgt', 'education', 'education_num', 
+                    'married', 'occupation', 'relationship', 'race', 'sex', 
+                    'capital_gain', 'capital_loss', 'hrs_week', 'native_country'
+                    , 'income')
+str(adult)
+```
+We need to convert each feature to a factor.
+```{r}
+# converting categorical variables
+adult$workclass = as.factor(adult$workclass)
+adult$education = as.factor(adult$education)
+adult$married = as.factor(adult$married)
+adult$occupation = as.factor(adult$occupation)
+adult$relationship = as.factor(adult$relationship)
+adult$race = as.factor(adult$race)
+adult$sex = as.factor(adult$sex)
+adult$native_country = as.factor(adult$native_country)
+adult$income = as.factor(adult$income)
+```
+
+```{r}
+str(adult)
+```
+All the categorical variables have been converted to factors, the numerical variables now need to be converted. 
+```{r}
+summary(adult[c('age', 'fnlwgt', 'education_num', 'capital_gain', 'capital_loss'
+                , 'hrs_week')])
+```
+
+```{r}
+plot(adult$capital_gain)
+plot(adult$capital_gain[which(adult$capital_gain<40000)])
+plot(adult$capital_gain[which(adult$capital_gain<20000)])
+# appears to be divisible into 6 groups
+plot(adult$capital_loss)
+# and 4 groups in capital_loss
+```
+
+Binning numerical variables
+```{r}
+# binning age by significant age levels. Note: 18 was chosen as that is age of 
+# adult, and 67 was chosen as that is the age of retirement in the US to 
+# receive full benefits. 
+adult = adult %>% mutate(age = cut(age, breaks = c(0,18,30,40,50,67,90)))
+# binning fnlwgt into 10 bins
+adult = adult %>% mutate(fnlwgt = ntile(fnlwgt, n=10))
+adult$fnlwgt = as.factor(adult$fnlwgt)
+# binning education_number by diploma level
+adult = adult %>% mutate(education_num = cut(education_num, 
+        breaks = c(0,8,12,16)))
+# binning capital_gain into the 6 groups observed above
+adult = adult %>% mutate(capital_gain = cut(capital_gain, 
+        breaks = c(-1, 2000,5500,12000,16000,45000,max(adult$capital_gain)))) 
+        #-1 used to include entries with value 0
+# binning capital_loss into the 4 grouos observed above
+adult = adult %>% mutate(capital_loss = cut(capital_loss, 
+        breaks = c(-1,100,1300,3000,max(adult$capital_loss)))) 
+        #-1 used to include entries with value 0
+# binning hrs_week by typical work week hours for not working, part time, 
+# full time, and over typical full-time. 
+adult = adult %>% mutate(hrs_week = cut(hrs_week, 
+        breaks = c(-1,30,40,50,60,max(adult$hrs_week))))
+str(adult)
+```
+create training and testing datasets
+```{r}
+# setting seed so that results do not change when knitting to pdf
+set.seed(1)
+# create training and test data by randomly sampling
+train.size = round(nrow(adult)*0.8) # 80% of the dataset used for training
+train.ind = sample(1:nrow(adult), train.size)
+adult_train = adult[train.ind,-15]
+adult_test = adult[-train.ind,-15]
+# create labels for training and test data
+adult_train_labels = adult[train.ind, 15]
+adult_test_labels = adult[-train.ind, 15]
+```
+The data is now fully prepared for training. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+Training the model involves feeding the dataset of the features and the corresponding labels to the model. Using these datasets the model calculates a probability for every single feature which it can then use to make predictions by calculating the probability of the input belonging to a class. Since this only requires basic mathematical operations the process is extremely quick compared to other algorithms.
+
+```{r}
+income_classifier = naiveBayes(adult_train[,c(2,4,8,14)], adult_train_labels)
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+
+```{r}
+income_test_pred = predict(income_classifier, adult_test[,c(2,4,8,14)])
+table(income_test_pred, adult_test_labels)
+CrossTable(income_test_pred, adult_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('predicted', 'actual'))
+```
+The model predicted someone's income being greater than 50k, 4600 times out of the 5460 people with income greater than 50k in the test set. It predicted someone's income being less than 50k, 739 times out of the total 1052 people with income less than 50k in the dataset. The model achieved an accuracy of 0.82 on the test dataset.
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+There are several options available to improve the model. The first is that we can implement a laplace smoothing to overcome the issue of 0 probability cases. We can also try to include more features in the model and see if we get better results. Lastly we can play around with the way that the bins for the numerical values were chosen. 
+
+```{r}
+### List of different model performances: 
+# original: 81.98%
+# original with laplace=1: 82.04%
+# with capital_gain added: 84%
+# with capital_gain and capital_loss added: 84.3%
+# with occupation:  worse performance
+# with fnlwgt: no improvement
+# with sex: worse performance
+# with race: no improvement
+# with hrs_week: worse performance
+
+income_classifier2 = naiveBayes(adult_train[,c(2,4,8,9,11,12,14)], adult_train_labels, laplace = 1)
+income_test_pred2 = predict(income_classifier2, adult_test[,c(2,4,8,9,11,12,14)])
+table(income_test_pred2, adult_test_labels)
+CrossTable(income_test_pred2, adult_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('predicted', 'actual'))
+```
+Adding a laplace smoothing to the model helped improve results slightly to 0.8204 from 0.8198. Adding capital_gain to the model further improved results up to 0.84 and with capital_loss included as well, prediction accuracy on the test dataset was 0.843. I then tried additional variables one at a time, like sex, hrs_week, and occupation, but they all either made the model worse, or had no effect. 
+
+The final model added a laplace smoothing, capital_gain, capital_loss and managed to achieve an accuracy of 0.843 compared to the original model's 0.82. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep5()
+```
+
+## Autograding
+
+```{r}
+.AutograderMyTotalScore()
+```
