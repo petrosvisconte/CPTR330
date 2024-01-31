@@ -1,0 +1,196 @@
+---
+title: "CPTR330 -- Homework 6"
+author: "Pierre Visconti"
+date: "May 8, 2023"
+output:
+  pdf_document:
+    number_section: no
+  html_document:
+    df_print: paged
+course: CPTR330
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+library(arules)
+library(readxl)
+library(plyr)
+library(dplyr)
+#source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+#.AutograderInit()
+```
+
+# Association Rules Apriori Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give two of the strengths and two of the weaknesses.
+```
+The apriori algorithm is an unsupervised rule learning algorithm that aims to find patterns found in the relationships among items in the dataset. The analysis is performed based on the idea of market basket analysis which looks at patterns of co-occurrence. The apriori algorithm is referred to as a "smart" rule learner since instead of evaluating each item one by one, which is computationally expensive, it takes advantage of the fact that some combinations rarely occur and ignores them. Some strengths are that is can handle large datasets and results in rules that are easy for a human to understand. Some weaknesses are that it is not as effective on smaller datasets and that it can easily draw false conclusions from random patterns. 
+
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The data is of all transactions occurring between 01/12/2010 and 09/12/2011 for a UK-based online retail company. The source is Dr Daqing Chen at the School of Engineering, London South Bank University. 
+
+importing the data
+```{r}
+data = read_excel('Online Retail.xlsx')
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+The dataset has 541,909 observations where each observation represents a transaction, and 8 features representing information on the transactions.  
+
+preparing data
+```{r}
+# only keep rows that are complete
+data = data[complete.cases(data), ]
+
+# converting variables to appropriate type
+data %>% mutate(Description = as.factor(Description))
+data %>% mutate(Country = as.factor(Country))
+data %>% mutate(StockCode = as.factor(StockCode))
+# Converts character data to date. Store InvoiceDate as date in new variable
+data$Date = as.Date(data$InvoiceDate)
+
+# Extract time from InvoiceDate and store in another variable
+TransTime = format(data$InvoiceDate,"%H:%M:%S")
+# Convert and edit InvoiceNo into numeric
+InvoiceNo = as.numeric(as.character(data$InvoiceNo))
+
+# Bind new columns TransTime and InvoiceNo into dataframe
+cbind(data,TransTime)
+cbind(data,InvoiceNo)
+```
+
+```{r}
+str(data)
+```
+storing transaction data into new dataframe
+```{r}
+#ddply(dataframe, variables_to_be_used_to_split_data_frame, function_to_be_applied)
+transactionData = ddply(data,c("InvoiceNo","Date"),
+                       function(df1)paste(df1$Description,
+                       collapse = ","))
+#set column InvoiceNo of dataframe transactionData  
+transactionData$InvoiceNo = NULL
+#set column Date of dataframe transactionData
+transactionData$Date = NULL
+#Rename column to items
+colnames(transactionData) = c("items")
+#Show Dataframe transactionData
+transactionData
+```
+write transactionData to new csv file
+```{r}
+write.csv(transactionData,"market_basket_transactions.csv", quote = FALSE, row.names = FALSE)
+```
+
+read from csv into object of transaction class
+```{r}
+tr = suppressWarnings(read.transactions('market_basket_transactions.csv', format = 'basket', sep=','))
+tr
+summary(tr)
+```
+```{r}
+# examine the frequency of items
+itemFrequency(tr[,1:3])
+
+# item frequency plot for top 20 items
+itemFrequencyPlot(tr, type="absolute", topN = 20, main="Absolute Item Frequency Plot")
+itemFrequencyPlot(tr, topN = 20, main="Relative Item Frequency Plot")
+
+# visualization of a random sample of 1000 transactions
+image(sample(tr, 1000))
+
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+To train the model, which in this case means producing the association rules, we use the apriori function from the arules R package. We pass our dataset as a parameter, along with values for the support, confidence and minlen variables. The variables are what we use as parameters to tune the output so that we find a balance between generating too many rules, and generating zero or only generic rules. 
+
+generating rules 
+```{r}
+association.rules = apriori(tr, parameter = list(supp=0.001, conf=0.8,maxlen=10))
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+
+looking at the first 10 rules
+```{r}
+inspect(association.rules[1:10])
+```
+```{r}
+summary(association.rules)
+```
+Looking at the quality measure summary we can see that there are a lot of rules above our minimum confidence and support parameters. If most of the rules were topping off at the values we set than that would be an indicator that we set them too aggresively but looking at the summary we can see that the 3rd quartile for confidence is at 0.92, which means there are plenty of rules with greater than 0.8 confidence, and the mean for support is 0.0014, above our 0.001 level. 
+
+Looking at the first 10 rules though we notice that while the confidence levels are very high, the rules themselves are not very useful. They are pretty obvious rules and are not very meaningful. What is note worthy is all these generic rules are only 1 in length. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+We can improve the performance of our rules by making the results more actionable. This means being able to sort and filter rules to find the more interesting or meaningful rules. We also have several parameters can be used to tune the rules generated. The parameters are the support, confidence and minlen. The support represents the minimum required rule support, the confidence represents the minimum required rule confidence and the minlen specifies the number of required rule items. 
+
+generating rules with a minlen parameter to eliminate obvious rules. 
+```{r}
+association.rules = apriori(tr, parameter = list(supp=0.001, conf=0.8,maxlen=10,minlen=3))
+```
+evaluating performance
+```{r}
+inspect(association.rules[1:10])
+summary(association.rules)
+```
+Once again our quality measure summary looks good, but this time the first 10 rules are becoming more meaningful. We now can see that buying black tea and sugar jars led to coffee 100% of the time, and the blue metal door sign 0 and 9 led to buying sign 8 86% of the time. 
+
+
+# writing rules to csv file
+```{r}
+write(association.rules, file="rules.csv", sep=",", quote=TRUE, row.names=FALSE)
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+#.AutogradeStep5()
+```
+
+## Autograding
+## Note: Had to comment out the autograder in order to knit
+## I was getting errors if I didn't. 
+```{r}
+#.AutograderMyTotalScore()
+```

@@ -1,0 +1,200 @@
+---
+title: "CPTR330 -- Homework 5"
+author: "Pierre Visconti"
+date: "May 1, 2023"
+output:
+  pdf_document:
+    number_section: no
+  html_document:
+    df_print: paged
+course: CPTR330
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+library("neuralnet")
+source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+.AutograderInit()
+```
+
+# ANN Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give two of the strengths and two of the weaknesses.
+```
+Artificial Neural Networks (ANN) use a model derived from our biological understanding of how our brains work to model the relationships between a set of input signals and an output signal. Each input is weighted by its determined importance and the net signals from all the inputs are fed to an activator function which determines whether the input threshold has been attained. Typically the weights will be adjusted with each iteration with the goal of minimizing error, the iterations are referred to as epochs. Strengths of ANN are that it can be adapted for both classification or numeric predictions, and it makes very little assumptions about the data. Some weaknesses are that it is extremely computationally intensive, and prone to overfitting.
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The dataset is called "Johns Hopkins University Ionosphere database". The source is the Space Physics Group at the Applied Physics Labratory at Johns Hopkins University. The dataset contains radar data that was collected by a system of 16 high-frequency antennas targetting free electrons in the ionosphere. The signals received by the antennas were processed and split into two seperate features for all 17 pulse numbers. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+
+Import the data
+```{r}
+data = read.csv("ionosphere.data", header=FALSE)
+```
+
+Looking over the data
+```{r}
+str(data)
+summary(data)
+```
+The dataset contains 35 features and 351 observations. All of the features are continous variables except for the label feature which is of character type with 'b' for bad and 'g' for good. 
+
+The V2 feature is uniquely 0 so we can remove it. The rest of the features are already normalized between -1 and 1, except for V1 which is 0-1, so we do not need to normalize the dataset. The label feature also needs to be converted to a binary variable from a character. 
+```{r}
+# removing V2 feature of all 0
+data = data[-2]
+# changing label feature to numerical values
+data$V35[data$V35 == 'b'] = 0 
+data$V35[data$V35 == 'g'] = 1 
+# setting V35 to numerical type
+data$V35 = as.numeric(data$V35)
+```
+
+Checking data to confirm changes
+```{r}
+str(data)
+```
+
+create training and testing datasets
+```{r}
+set.seed(330) # setting seed
+# create training and test data by randomly sampling
+train.size = round(nrow(data)*0.75) # 75% of the dataset used for training
+train.ind = sample(1:nrow(data), train.size)
+data_train = data[train.ind,]
+data_test = data[-train.ind,]
+```
+We are now ready to train the model
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+We train the model using the neuralnet function from the neuralnet library. The command requires that we pass our dataset and also specify the class variable (ouput signal) and the features we want to give as input (input signals). In this case we will pass all of the features in our dataset to the model. 
+
+training model with default parameters, 1 hidden layer with 1 hidden node. 
+```{r}
+set.seed(330) # setting seed
+model = neuralnet(V35~.,data=data_train)
+plot(model, rep = "best")
+```
+
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+
+Test model performance on both training and testing sets
+```{r}
+# predict
+model_results_train = neuralnet::compute(model, data_train[-34])
+model_results_test = neuralnet::compute(model, data_test[-34])
+# obtain predicted strength values
+predicted_train = model_results_train$net.result
+predicted_test = model_results_test$net.result
+# examine the correlation between predicted and actual values
+print("Training set:")
+cor(predicted_train, data_train[34])
+print("Testing set:")
+cor(predicted_test, data_test[34])
+```
+The model achieved an accuracy of 0.823 on the testing set and 0.908 on the training set. The results show us that we are experiencing some overfitting with the model since we achieved significantly better results on the training set, but we still got fairly good results with the testing set so the model is effective.
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+We have several options available to improve the performance of the model. We currently only have 1 hidden node with 1 hidden layer, so we could try adding more hidden nodes to our layer and/or adding more hidden layers to create a deep artificial neural network. We could also try using a different activator function. 
+
+Training model with multiple hidden nodes and layers. First hidden layer has 10 nodes, the second has 5 nodes, and the third has 5 nodes. 
+```{r}
+set.seed(330)
+model = neuralnet(V35~.,data=data_train, hidden=c(10,5,5))
+plot(model, rep = "best")
+```
+
+Test model performance on both training and testing sets
+```{r}
+# predict
+model_results_train = neuralnet::compute(model, data_train[-34])
+model_results_test = neuralnet::compute(model, data_test[-34])
+# obtain predicted strength values
+predicted_train = model_results_train$net.result
+predicted_test = model_results_test$net.result
+# examine the correlation between predicted and actual values
+print("Training set:")
+cor(predicted_train, data_train[34])
+print("Testing set:")
+cor(predicted_test, data_test[34])
+```
+This model performed significantly better than our original mode. We achieved an accuracy of 0.915 on the testing set over the 0.823 from before and 0.995 on the training set compared to 0.908 from the original. Again, there is some overfitting occurring, but the model still performed very well on the testing set. 
+
+Using a different activator function: using a softplus activator function. To compare results with the original model all other parameters were left the same (1 hidden layer, 1 hidden nodes). 
+```{r}
+set.seed(330) # setting seed
+# defining our softplus activator function
+softplus <- function(x) { log(1 + exp(x)) }
+# training the model
+model = neuralnet(V35~.,data=data_train, act.fct=softplus)
+plot(model, rep = "best")
+```
+
+Test model performance on both training and testing sets
+```{r}
+# predict
+model_results_train = neuralnet::compute(model, data_train[-34])
+model_results_test = neuralnet::compute(model, data_test[-34])
+# obtain predicted strength values
+predicted_train = model_results_train$net.result
+predicted_test = model_results_test$net.result
+# examine the correlation between predicted and actual values
+print("Training set:")
+cor(predicted_train, data_train[34])
+print("Testing set:")
+cor(predicted_test, data_test[34])
+```
+The model with the softplus activator function performed significantly worst than our previous improved model and the original model. It achieved 0.733 on the testing set and 0.775 on the training set. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep5()
+```
+
+## Autograding
+
+```{r}
+.AutograderMyTotalScore()
+```

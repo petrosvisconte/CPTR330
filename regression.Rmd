@@ -1,0 +1,203 @@
+---
+title: "CPTR330 -- Homework 4"
+author: "Pierre Visconti"
+date: "April 24, 2023"
+course: CPTR330
+output: 
+  pdf_document:
+    number_section: false
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+.AutograderInit()
+options(max.print=400)
+```
+
+# Regression Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give two of the strengths and two of the weaknesses.
+```
+Regression is an algorithm that relates a single dependent variable to one or more independent variables. Depending on the type of regression, an assumption on the relationship between the dependent and independent variable(s) is made. For example with linear regression we assume that the relationship is linear. The algorithm will build an explicit model which can be used to make predictions. 
+Some strengths of regression are that it gives estimates for the strength of the relationships and the size of the relationships. Regression can also be adapted to model many different tasks. 
+Some weaknesses of regression are that it makes some strong assumptions about the data and does not handle missing data. 
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The data is about the popularity of online news articles. The creators of the dataset are Kelwin Fernandes, Pedro Vinagre, and Pedro Sernadela. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+The dataset has 39,797 observations and contains 61 features in total. The features include one called shares which gives the total number of shares (our goal variable), 2 non predictive variables which can be removed from the dataset, and 58 predictive variables. The variables are all numerical and the dataset does not contain any missing data. The two non predictive variables can be removed, and since the rest are numerical, the dataset can be immediately used for a regression model. 
+
+importing the data and removing non-predictive variables. 
+```{r}
+data = read.csv("OnlineNewsPopularity.csv")
+str(data)
+# removing the variables not needed
+data=data[-c(1,2)]
+# removing NA values
+data=na.omit(data)
+```
+displaying correlation between the shares feature against all other features
+```{r}
+# changing scientific notation limit
+options(scipen=999)
+# correlation matrix
+corr = cor(data, data$shares)
+print(corr)
+corr = abs(corr)
+corr_sorted <- sort(corr, decreasing = TRUE)
+corr_sorted[1:5]
+```
+
+plotting features with the highest correlation to visualize the relationship
+```{r}
+# setting margins to smallet possible
+par(mar = c(1, 1, 1, 1))
+# scatterplot matrix
+pairs(data[55:59]) 
+pairs(data[c('shares', 'kw_avg_avg')])
+pairs(data[c('shares', 'LDA_03')])
+pairs(data[c('shares', 'kw_max_avg')])
+pairs(data[c('shares', 'LDA_02')])
+pairs(data[c('shares', 'num_hrefs')])
+```
+create training and testing datasets
+```{r}
+# setting seed
+set.seed(330)
+# create training and test data by randomly sampling
+train.size = round(nrow(data)*0.85) # 85% of the dataset used for training
+train.ind = sample(1:nrow(data), train.size)
+data_train = data[train.ind,]
+data_test = data[-train.ind,]
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+To train the linear regression model we can use the lm() function from the R stats package. We need to supply it with our training dataset, and inform it which variable is our dependent variable and what independent variables we want to include in the model. 
+
+training the model
+```{r}
+model = lm(shares~.,data=data_train)
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+
+```{r}
+# provides a summary of our model
+summary(model)
+```
+While the overall p-value is very low, which informs us that there definitely is a relationship, the R^2 value is also very low which means that the model is not describing very much of the dataset. The model is not performing well.  
+
+```{r}
+# model accuracy for training set
+data_train$pred = predict(model, data_train[-59])
+cor(data_train$pred, data_train$shares)
+# model accuracy for testing set
+data_test$pred = predict(model, data_test[-59])
+cor(data_test$pred, data_test$shares)
+```
+Checking the accuracy of our predictions using the model, on both the training and testing set, confirms what we observed in the model summary. Notably the model performs significantly worse on the testing set which means that there probably is overfitting occurring as well. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+One option we have to improve the model is to account for non-linear relationships between the dependent and independent variables. We could account for a polynomial relationship by adding a higher order term to the regression equation. For example we could square the independent variable that has the non-linear relationship and save it as a new variable and then include that new variable in the model. Another method could involve converting a numerical variable that we think could best be described as a binary variable to a binary variable and then including it in the model. We could also look at the summary of the model and eliminate variables with the highest p-values as they are the ones with the least strongest relationships. They could be eliminated one by one and checking the model performance each time for improvement.    
+
+
+accounting for non-linear relationships that were observed in the pairs scatterplots
+```{r}
+# kw_avg_avg
+data_train$kw_avg_avg2 = data_train$kw_avg_avg^2
+data_test$kw_avg_avg2 = data_test$kw_avg_avg^2
+# kw_max_avg
+data_train$kw_max_avg2 = data_train$kw_max_avg^2
+data_test$kw_max_avg2 = data_test$kw_max_avg^2
+# num_hrefs
+data_train$num_hrefs2 = data_train$num_hrefs^2
+data_test$num_hrefs2 = data_test$num_hrefs^2
+```
+
+Training new model
+```{r}
+model = lm(shares~.,data=data_train)
+# provides a summary of our model
+summary(model)
+```
+Slightly better R^2 value. 
+
+```{r}
+# model accuracy for training set
+data_train$pred = predict(model, data_train[-59])
+cor(data_train$pred, data_train$shares)
+# model accuracy for testing set
+data_test$pred = predict(model, data_test[-59])
+cor(data_test$pred, data_test$shares)
+```
+slightly better results for both the training and testing set
+
+Eliminating variables with the highest p-values
+```{r}
+model = lm(shares~data_channel_is_entertainment+global_subjectivity+
+             self_reference_max_shares+self_reference_min_shares+
+             kw_avg_avg+kw_min_avg+kw_max_avg+
+             data_channel_is_lifestyle+data_channel_is_bus+average_token_length+
+             num_self_hrefs+num_hrefs+num_hrefs+n_tokens_title
+           , data=data_train)
+# provides a summary of our model
+summary(model)
+# model accuracy for training set
+data_train$pred = predict(model, data_train[-59])
+cor(data_train$pred, data_train$shares)
+# model accuracy for testing set
+data_test$pred = predict(model, data_test[-59])
+cor(data_test$pred, data_test$shares)
+```
+This resulted in worse perfomance for both the training and test set. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep5()
+```
+
+## Autograding
+
+```{r}
+.AutograderMyTotalScore()
+```
