@@ -1,0 +1,161 @@
+---
+title: "CPTR330 -- Homework 7"
+author: "Pierre Visconti"
+date: "May 15, 2023"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    number_section: no
+course: CPTR330
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+#source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+#.AutograderInit()
+```
+
+# K-means Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give two of the strengths and two of the weaknesses.
+```
+K-means is an unsupervised clustering algorithm. Since it is unsupervised so you do not need to tell the algorithm what labels look for and what to classify objects as. The goal of K-means is to give a label to an object based on the relationships present in the dataset, which is determined by the algorithm itself. K-means will aim to minimize the differences within clusters while maximizing the difference between the 'k' clusters. Some strengths of K-means is that it performs well for real world use cases and the algorithm itself is pretty basic which means it can be easily understood. Some weaknesses of K-means is that since it relies on some random chance you may get very different results for some datasets with each run. It also requires 'k' to be defined to run the algorithm which means that you must already have some idea of what the 'k' value should be.   
+
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The source of the data is Shini, Renjith who captured user ratings from Google reviews. The dataset represents Google reviews on attractions from 24 categories across Europe. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+
+importing the data
+```{r}
+data = read.csv("google_review_ratings.csv", header=TRUE)
+colnames(data) = c("user_id", "churches", "resorts", "beaches", "parks", "theatres", "museums", "malls", "zoo", "restaurants", "bars", "local_services", "burger_pizza", "lodgings", "juice_bars", "art_galleries", "dance_clubs", "pools", "gyms", "bakeries", "spas", "cafes", "view_points", "monuments", "gardens")
+```
+
+The dataset has 26 features in total. One of which is the user id, and another which is included but was not specified on the UCI website as a feature. The rest are the 24 categories. We can eliminate the user id variable as it is not helpful. 
+```{r}
+data = data[-1]
+str(data)
+```
+looking at data summary to check for ranges of each feature and converting category.11 to numerical
+```{r}
+data$local_services = as.numeric(data$local_services)
+summary(data)
+```
+As we can see all of the features are already normalized so we do not need to normalize the dataset. The only feature we need to deal with is X as it has a lot of NA values. We also have a single NA value for category.11, category.12 and category.24 which can be omitted. 
+
+Dealing with NA values for categories. 
+```{r}
+# removing X feature since it only has 2 non NA values
+data = data[-25]
+# dealing with categories missing single observation
+data = data[!is.na(data$local_services)&!is.na(data$burger_pizza)&!is.na(data$gardens),]
+summary(data)
+```
+As we can see, all the NA values have been dealt with. 
+
+Checking for outliers
+```{r}
+boxplot(data)
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+We train and create the model using the kmeans() function from the R stats library. The kmeans() function takes in a dataset as a paramater along with a 'k' value which specifies the desired number of clusters. 
+
+training model with 3 clusters
+```{r}
+set.seed(330)
+clusters = kmeans(data, 3)
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+To check model performance, we must manually inspect the clusters and see if the model is producing any noticeable relationships.
+
+```{r}
+clusters$size
+clusters$centers
+```
+It is hard to tell whether the model is producing meaningful clusters are actually different from each other or not. The clusters have similar values for many of the features yet there are some features like theatres, museums, malls, restaurants, and spas that have very different mean ratings across the clusters. If we focus on these features we realize that there are some differences between the clusters so the model does seem to be producing some good results. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+To improve the model we can use our results to get insight on the dataset and turn these insights into action. We can also tune the 'k' value to change the number of clusters.  
+
+Examining cluster assignment to individual characteristics
+```{r}
+# apply the cluster IDs to the original data frame
+data$cluster <- clusters$cluster
+# look at the first five records for the features we noticed a difference in
+data[1:5, c("theatres", "museums", "malls")]
+
+# mean age by cluster
+aggregate(data = data, theatres ~ cluster, mean)
+
+# proportion of females by cluster
+aggregate(data = data, museums ~ cluster, mean)
+
+# mean number of friends by cluster
+aggregate(data = data, malls ~ cluster, mean)
+```
+Creating a model with 5 clusters 
+```{r}
+set.seed(330)
+clusters = kmeans(data, 5)
+clusters$size
+clusters$centers
+```
+The differences between clusters appears to be more drastic with thenumber of clusters set to 5 instead of 3, which indicates that 3 clusters was probably too low for this dataset. 
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep5()
+```
+
+## Autograding
+
+```{r}
+#.AutograderMyTotalScore()
+```
