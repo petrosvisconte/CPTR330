@@ -1,0 +1,204 @@
+---
+title: "CPTR330 -- Homework 1"
+author: Pierre Visconti
+date: 4/3/2023
+course: CPTR330
+output: 
+  pdf_document:
+    number_section: false
+---
+
+```{r setup,echo=FALSE,message=FALSE}
+library("here")
+library("stringr")
+source(here("homework","autograding", paste(tail(str_split(getwd(), "/")[[1]], 1), "_tests.R", sep="")))
+.AutograderInit()
+```
+
+# K-Nearest Neighbors Algorithm
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Describe the algorithm and give a two of the strengths and two of the weaknesses.
+```
+K-Nearest Neighbor (KNN), is a supervised learning classification algorithm. It will classify a given input by looking at its k nearest neighbors and the class that those neighbors are categorized as. It will then classify the input based on the most frequent class observed from the nearest neighbors. The strengths of KNN is that it makes zero assumptions about the data and it is very simple to implement. Some weaknesses about KNN is that it needs to store the entire training data in memory, it does not produce a model which can later be used. It also has a time complexity of O(n) which means that large datasets will take a while to predict. 
+
+
+## Step 1 - Collect Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Give an overview of the data and its source.
+```
+The Iris dataset gives the measurements for sepal length/width, and petal length/width in cm for flowers from three species of Iris'. The source of the data is Annals of Eugenics (1936) by R.A. Fisher and the Bulletin of the American Iris Society (1935) by Edgar Anderson. 
+
+```{r}
+# import data
+data("iris")
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep1()
+```
+
+## Step 2 - Exploring And Preparing The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the data features and any transformations.
+```
+```{r}
+str(iris)
+table(iris$Species)
+round(prop.table(table(iris$Species)) * 100, digits = 1)
+```
+There are 50 flowers for each species of Iris, for a total of 150 observations. There are four numerical variables (length/width measurements) and one categorical variable (species of Iris). The data is not randomized, it is organized by species of Iris so it will need to be randomly sampled from when creating the training/testing datasets. 
+
+Lets focus on two features, "Sepal.Length" and "Petal width" to get a better picture of data.
+
+```{r}
+plot(iris[c("Sepal.Length", "Petal.Width")], pch=c(iris$Species))
+```
+The three species are plotted on the graph with a different symbol for each species. There already appears to be a pretty good distinction (groups) between the species which means that a classification algorithm like KNN should perform well on this dataset.
+
+```{r}
+summary(iris[c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width")])
+```
+As can be seen from the code chunk above, the variables are not scaled the same, so the data needs to be normalized. 
+
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+# create a new variable for the normalized dataset
+iris_n <- as.data.frame(lapply(iris[1:4], normalize))
+summary(iris_n[c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width")])
+```
+The data is now normalized. 
+
+```{r}
+# setting seed so that results do not change when knitting to pdf
+set.seed(1)
+# create training and test data
+train.size <- round(nrow(iris_n)*0.8) # 80% of the dataset used for training
+train.ind <- sample(1:nrow(iris_n), train.size)
+iris_train <- iris_n[train.ind,]
+iris_test <- iris_n[-train.ind,]
+# create labels for training and test data
+iris_train_labels <- iris[train.ind, 5]
+iris_test_labels <- iris[-train.ind, 5]
+```
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep2()
+```
+
+## Step 3 - Training A Model On The Data
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain how to train the model.
+```
+The k-nearest neighbors takes a training and test dataset, the train labels and a value for k. 
+A good starting value for *k* is typically the square root of the number of records. 
+In this case, the training dataset has 150 records so our starting *k* will be 12 (after rounding down).
+```{r}
+library(class)
+iris_test_pred <- knn(train = iris_train, 
+                      test = iris_test, 
+                      cl = iris_train_labels, 
+                      k = 12)
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep3()
+```
+
+## Step 4 - Evaluating Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: Explain the model's performance. Highlight key results.
+```
+The model has three different species to predict. For each species there are two possible outcomes, a correct classification of the species and a classification as the wrong species. For the setosa species, there were 11 total observations in the testing set. Of these 11 the model predicted all 11 correctly. For the versicolor species, there were 12 total observations in the testing set. Of these 12 the model predicted 12 all correctly. For the virginica species there were 7 total observations in the testing set. Of these 7 the model predicted 6 correctly and 1 incorrectly. This means the model predicted 29/30 observations correctly resulting in an accuracy of 96.7%. 
+```{r}
+library(gmodels)
+table(iris_test_labels, iris_test_pred)
+CrossTable(x = iris_test_labels, 
+           y = iris_test_pred, 
+           prop.chisq = FALSE)
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep4()
+```
+
+## Step 5 - Improving Model Performance
+
+```{note,eval=FALSE,echo=FALSE}
+Homework Notes: What options can be used to improve the model? Explain and show.
+```
+We have two options available to try and improve the model:
+The first is that we can normalize the data using a z-score standardization instead of min-max. 
+The second is that we can tune the value of *k* to see if we can get better results. 
+
+```{r}
+# z-scale standardization
+iris_z <- as.data.frame(scale(iris[-5]))
+
+# confirm that the transformation was applied correctly
+summary(iris_z[c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width")])
+
+# create training and test data using the same indexes as before so a direct comparison can be made
+iris_train <- iris_z[train.ind,]
+iris_test <- iris_z[-train.ind,]
+
+# re-classify test cases
+iris_test_pred <- knn(train = iris_train, 
+                      test = iris_test,
+                      cl = iris_train_labels, 
+                      k = 12)
+
+# Create the cross tabulation of predicted vs. actual
+CrossTable(x = iris_test_labels, 
+           y = iris_test_pred,
+           prop.chisq = FALSE)
+```
+The results for z-score standardization are exactly the same as our original previous model. 
+
+
+Now lets try different values for *k*.
+To keep the output down, all results will be shown with a simple table.
+For these checks, the percentages are not required to understand the performance. 
+```{r}
+# try several different values of k
+iris_train <- iris_n[train.ind,]
+iris_test <- iris_n[-train.ind, ]
+
+
+iris_test_pred <- knn(train = iris_train, test = iris_test, cl = iris_train_labels, k = 1)
+table(iris_test_labels, iris_test_pred)
+
+iris_test_pred <- knn(train = iris_train, test = iris_test, cl = iris_train_labels, k = 5)
+table(iris_test_labels, iris_test_pred)
+
+iris_test_pred <- knn(train = iris_train, test = iris_test, cl = iris_train_labels, k = 11)
+table(iris_test_labels, iris_test_pred)
+
+iris_test_pred <- knn(train = iris_train, test = iris_test, cl = iris_train_labels, k = 15)
+table(iris_test_labels, iris_test_pred)
+
+iris_test_pred <- knn(train = iris_train, test = iris_test, cl = iris_train_labels, k = 21)
+table(iris_test_labels, iris_test_pred)
+
+iris_test_pred <- knn(train = iris_train, test = iris_test, cl = iris_train_labels, k = 27)
+table(iris_test_labels, iris_test_pred)
+```
+``` For all values of *k* the results are exactly the same as our original model. Therefore an improvement was not made over the original model from either possible options. 
+
+```{r, eval=FALSE, echo=FALSE}
+.AutogradeStep5()
+```
+
+## Autograding
+
+```{r}
+.AutograderMyTotalScore()
+```
